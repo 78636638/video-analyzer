@@ -1,0 +1,31 @@
+Script Guidance Instructions
+
+Output Language
+{OUTPUT_LANGUAGE}
+
+Scene Cards
+{SCENE_CARDS}
+
+Story Beats
+{STORY_BEATS}
+
+Character Timeline
+{CHARACTER_TIMELINE}
+
+Your Task
+请基于当前分析结果，输出一份可用于剧本整理、分镜归纳或后续视频再创作的实用指导。
+内容必须以已提供的分析结果为依据，不得新增未经支持的剧情。
+
+Output Focus
+- theme
+- tone
+- scene order
+- dialogue candidates
+- visual prompt hints
+- screenplay notes
+
+Rules
+- 输出内容必须使用 `{OUTPUT_LANGUAGE}`。
+- 保持制作导向、简洁可用。
+- 优先强调故事连续性、人物一致性与关键视觉线索。
+- 不要添加没有证据支持的剧情点。

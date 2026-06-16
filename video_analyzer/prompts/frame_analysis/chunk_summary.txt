@@ -1,0 +1,27 @@
+Chunk Summary Instructions
+
+Output Language
+{OUTPUT_LANGUAGE}
+
+Chunk Frame Notes
+{CHUNK_FRAME_NOTES}
+
+Your Task
+请将这一阶段视频内容总结为一段简洁的阶段摘要。
+重点关注：
+- 场景连续性
+- 关键可见动作
+- 主要转场
+- 重复出现的人物
+- 重要道具或环境变化
+
+Output Format
+请使用 {OUTPUT_LANGUAGE} 输出：
+Summary:
+[1 段简短总结]
+
+Key Characters:
+- ...
+
+Key Events:
+- ...

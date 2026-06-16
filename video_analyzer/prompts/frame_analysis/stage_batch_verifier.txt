@@ -1,0 +1,50 @@
+Stage Batch Verification Instructions
+
+Output Language
+{OUTPUT_LANGUAGE}
+
+Stage Metadata
+- stage_id: {STAGE_ID}/{TOTAL_STAGES}
+- time_range: {STAGE_TIME_RANGE}
+- frame_numbers: {FRAME_NUMBERS}
+
+Previous Stage Summary
+{PREVIOUS_STAGE_SUMMARY}
+
+Current Verification Batch
+- batch_id: {VERIFIER_BATCH_ID}/{VERIFIER_BATCH_TOTAL}
+- batch_time_range: {VERIFIER_BATCH_TIME_RANGE}
+- batch_frame_numbers: {VERIFIER_BATCH_FRAME_NUMBERS}
+
+Audio Evidence
+{AUDIO_EVIDENCE}
+
+Candidate Structured Result
+{CANDIDATE_JSON}
+
+Candidate Raw Response
+{RAW_RESPONSE}
+
+Your Task
+请基于当前阶段图片、音频线索和候选结果，输出一个严格的结构化复核结果，用于统一收口。
+
+Rules
+- 只保留能被当前阶段连续画面或音频共同支持的事实。
+- 优先保证故事连续性、人物一致性、场景一致性。
+- 当前批次图片必须全部参与核验，不得只根据部分图片下结论。
+- 人物身份不确定时，使用保守通用称谓，不要脑补姓名、职业、亲属关系。
+- 字幕、弹幕、平台标题、营销文案、封面文案、按钮文字只能写入 `overlay_text_lines`。
+- `scene_label`、`key_characters`、`key_events`、`detail_lines` 不得抄写 prompt，不得写入无证据的新剧情。
+- 只核验当前阶段，不要重写前面所有阶段。
+- 严格输出 JSON，且必须包含所有字段。
+
+Output JSON Schema
+{
+  "scene_label": "",
+  "scene_lines": [],
+  "key_characters": [],
+  "key_events": [],
+  "detail_lines": [],
+  "overlay_text_lines": [],
+  "timeline_summary": ""
+}

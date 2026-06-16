@@ -25,6 +25,32 @@
                         <p class="upload-formats">Supported formats: MP4, AVI, MOV, MKV</p>
                     </div>
                 </div>
+
+                <div class="upload-progress" id="uploadProgress" style="display: none;">
+                    <div class="progress-header">
+                        <span id="uploadStatus">Uploading video...</span>
+                        <span id="uploadPercent">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="uploadProgressFill"></div>
+                    </div>
+                </div>
+
+                <div class="history-section">
+                    <h2>Server Videos</h2>
+                    <div class="form-group">
+                        <label for="serverVideoSelect">Existing Video Files:</label>
+                        <select id="serverVideoSelect">
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+                    <div class="history-actions">
+                        <button type="button" class="secondary-button" id="refreshVideos">Refresh</button>
+                        <button type="button" class="primary-button" id="useServerVideo">Confirm</button>
+                        <button type="button" class="danger-button" id="deleteServerVideo">Delete</button>
+                    </div>
+                    <p class="history-help" id="serverVideoMeta">Select an existing video on the server to continue.</p>
+                </div>
             </section>
 
             <!-- Configuration Section -->
@@ -111,6 +137,26 @@
                         <label for="keep-frames">Keep Extracted Frames</label>
                     </div>
 
+                    <div class="form-group">
+                        <label for="uploadedVideoPath">Uploaded Video Path:</label>
+                        <input type="text" id="uploadedVideoPath" readonly placeholder="Path will be filled after upload">
+                    </div>
+
+                    <div class="analysis-defaults-panel">
+                        <h3>Active Analysis Defaults</h3>
+                        <p class="analysis-defaults-help" id="analysisDefaultsSummary">Loading analysis defaults from server config...</p>
+                        <div class="analysis-defaults-grid">
+                            <div><strong>Context Window:</strong> <span id="analysisContextWindow">-</span></div>
+                            <div><strong>Legacy History:</strong> <span id="analysisLegacyHistory">-</span></div>
+                            <div><strong>Chunk Summary:</strong> <span id="analysisChunkSummary">-</span></div>
+                            <div><strong>Chunk Max Frames:</strong> <span id="analysisChunkMaxFrames">-</span></div>
+                            <div><strong>Audio Window:</strong> <span id="analysisAudioWindow">-</span></div>
+                            <div><strong>Max Image Side:</strong> <span id="analysisMaxImageSide">-</span></div>
+                            <div><strong>JPEG Quality:</strong> <span id="analysisJpegQuality">-</span></div>
+                            <div><strong>Long Video Threshold:</strong> <span id="analysisLongVideoThreshold">-</span></div>
+                        </div>
+                    </div>
+
                     <!-- Command Preview -->
                     <div class="command-preview">
                         <h3>Command Preview</h3>
@@ -126,8 +172,51 @@
             <!-- Output Section -->
             <section class="output-section" id="outputSection" style="display: none;">
                 <h2>Analysis Output</h2>
+                <div class="analysis-status-panel" id="analysisStatusPanel">
+                    <div class="analysis-status-grid">
+                        <div><strong>Connection:</strong> <span id="analysisConnection">Idle</span></div>
+                        <div><strong>State:</strong> <span id="analysisState">Idle</span></div>
+                        <div><strong>Step:</strong> <span id="analysisStep">Waiting</span></div>
+                        <div><strong>Frame Progress:</strong> <span id="analysisFrameProgress">0 / 0</span></div>
+                    </div>
+                    <div class="analysis-progress-bar">
+                        <div class="analysis-progress-fill" id="analysisProgressFill"></div>
+                    </div>
+                    <p class="analysis-status-meta" id="analysisStatusMeta">Waiting to start analysis.</p>
+                </div>
                 <div class="output-container">
                     <pre id="outputText"></pre>
+                </div>
+                <div class="results-preview" id="resultsPreview" style="display: none;">
+                    <h3>Structured Result Preview</h3>
+                    <div class="results-preview-grid">
+                        <div><strong>Frames:</strong> <span id="previewFramesProcessed">-</span></div>
+                        <div><strong>Audio Language:</strong> <span id="previewAudioLanguage">-</span></div>
+                        <div><strong>Chunks:</strong> <span id="previewChunkCount">-</span></div>
+                        <div><strong>Scenes:</strong> <span id="previewSceneCount">-</span></div>
+                        <div><strong>Story Beats:</strong> <span id="previewBeatCount">-</span></div>
+                        <div><strong>Characters:</strong> <span id="previewCharacterCount">-</span></div>
+                    </div>
+                    <div class="result-card">
+                        <h4>Audio Summary</h4>
+                        <p id="previewAudioSummary">No audio summary available.</p>
+                    </div>
+                    <div class="result-card">
+                        <h4>Scene Cards</h4>
+                        <pre id="previewSceneCards">[]</pre>
+                    </div>
+                    <div class="result-card">
+                        <h4>Story Beats</h4>
+                        <pre id="previewStoryBeats">[]</pre>
+                    </div>
+                    <div class="result-card">
+                        <h4>Character Timeline</h4>
+                        <pre id="previewCharacterTimeline">[]</pre>
+                    </div>
+                    <div class="result-card">
+                        <h4>Script Guidance</h4>
+                        <pre id="previewScriptGuidance">{}</pre>
+                    </div>
                 </div>
                 <div class="output-actions" style="display: none;">
                     <button id="downloadResults" class="secondary-button">Download Results</button>

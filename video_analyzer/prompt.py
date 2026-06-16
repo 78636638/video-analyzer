@@ -13,21 +13,7 @@ class PromptLoader:
 
     def _find_prompt_file(self, prompt_path: str) -> Path:
         """Find prompt file in package resources, package directory, or user directory."""
-        # First try package resources (works for both install modes)
-        try:
-            package_path = pkg_resources.resource_filename('video_analyzer', f'prompts/{prompt_path}')
-            if Path(package_path).exists():
-                return Path(package_path)
-        except Exception as e:
-            logger.debug(f"Could not find package prompt via pkg_resources: {e}")
-
-        # Try package directory (for development mode)
-        pkg_root = Path(__file__).parent
-        pkg_path = pkg_root / 'prompts' / prompt_path
-        if pkg_path.exists():
-            return pkg_path
-
-        # Finally try user-specified directory if provided
+        # Prefer user-specified directories so local prompt tuning can override bundled defaults.
         if self.prompt_dir:
             user_path = Path(self.prompt_dir).expanduser()
             # Try absolute path
@@ -40,6 +26,20 @@ class PromptLoader:
                 cwd_path = Path.cwd() / self.prompt_dir / prompt_path
                 if cwd_path.exists():
                     return cwd_path
+
+        # Then try package resources (works for both install modes)
+        try:
+            package_path = pkg_resources.resource_filename('video_analyzer', f'prompts/{prompt_path}')
+            if Path(package_path).exists():
+                return Path(package_path)
+        except Exception as e:
+            logger.debug(f"Could not find package prompt via pkg_resources: {e}")
+
+        # Finally try package directory (for development mode)
+        pkg_root = Path(__file__).parent
+        pkg_path = pkg_root / 'prompts' / prompt_path
+        if pkg_path.exists():
+            return pkg_path
 
         raise FileNotFoundError(
             f"Prompt file not found in package resources, package directory, or user directory ({self.prompt_dir})"
@@ -98,3 +98,11 @@ class PromptLoader:
         except Exception as e:
             logger.error(f"Error loading prompt '{name}': {e}")
             raise
+
+    def get_optional_by_name(self, name: str, default: str = "") -> str:
+        """Load a prompt by name, returning a caller-supplied default on failure."""
+        try:
+            return self.get_by_name(name)
+        except Exception:
+            logger.warning("Prompt '%s' not found, falling back to default text", name)
+            return default

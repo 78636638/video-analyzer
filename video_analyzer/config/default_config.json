@@ -3,13 +3,13 @@
         "default": "ollama",
         "temperature": 0.0,
         "ollama": {
-            "url": "http://localhost:11434",
-            "model": "llama3.2-vision"
+            "url": "http://127.0.0.1:11434",
+            "model": "qwen2.5vl:7b"
         },
         "openai_api": {
-            "api_key": "",
-            "model": "meta-llama/llama-3.2-11b-vision-instruct",
-            "api_url": "https://openrouter.ai/api/v1"
+            "api_key": "sk-cp-IGVLVl8JUyp29sEJkQWnvQ_08erYh9X_N9oQAVKNlZkxMsqqSaBOyzSxbN8qEuC16KGIPpXT0_4U2rM5a5cSfsoG-b-_wz99eTfH_G9B-kauNmMdEK9ZQeg",
+            "model": "MiniMax-M3",
+            "api_url": "https://api.minimaxi.com/v1"
         }
     },
     "prompt_dir": "prompts",
@@ -21,6 +21,18 @@
         {
             "name": "Video Reconstruction",
             "path": "frame_analysis/describe.txt"
+        },
+        {
+            "name": "Chunk Summary",
+            "path": "frame_analysis/chunk_summary.txt"
+        },
+        {
+            "name": "Script Guidance",
+            "path": "frame_analysis/script_guidance.txt"
+        },
+        {
+            "name": "Stage Batch Verifier",
+            "path": "frame_analysis/stage_batch_verifier.txt"
         }
     ],
     "output_dir": "output",
@@ -42,10 +54,54 @@
         "sample_rate": 16000,
         "channels": 1,
         "quality_threshold": 0.2,
-        "chunk_length": 30,
+        "chunk_length": 8,
         "language_confidence_threshold": 0.8,
-        "language": "en",
+        "language": "",
         "device": "cpu"
+    },
+    "analysis": {
+        "context_window": 5,
+        "legacy_full_history": false,
+        "memory_update_interval": 8,
+        "scene_change_threshold": 18.0,
+        "audio_alignment_window": 2.0,
+        "enable_chunk_summary": true,
+        "chunk_max_frames": 12,
+        "chunk_min_frames_before_summary": 6,
+        "chunk_min_duration_seconds": 8.0,
+        "adaptive_frame_budget_threshold_minutes": 1.0,
+        "adaptive_frames_per_minute": 36,
+        "extended_frame_budget_threshold_minutes": 3.0,
+        "extended_frames_per_minute": 24,
+        "long_video_threshold_minutes": 15,
+        "max_image_side": 1024,
+        "image_jpeg_quality": 85,
+        "enable_stage_batch_analysis": true,
+        "stage_batch_size": 10,
+        "stage_batch_max_images": 10,
+        "stage_batch_num_predict": 1200,
+        "stage_batch_num_ctx": 16384,
+        "stage_batch_prompt_path": "/home/waylin/project/video-analyzer/scrcpy/prompt/qwen2.5vl-7b-prompy.txt",
+        "stage_batch_context_summary_count": 3,
+        "stage_verifier_enabled": true,
+        "stage_verifier_client": "openai_api",
+        "stage_verifier_model": "",
+        "stage_verifier_max_images": 6,
+        "stage_verifier_num_predict": 800,
+        "stage_verifier_num_ctx": 16384,
+        "stage_verifier_attempts": 3,
+        "stage_verifier_retry_enabled": true,
+        "stage_verifier_retry_num_predict": 1400,
+        "stage_verifier_retry_max_images": 4,
+        "text_refiner_enabled": false,
+        "frame_prompt_story_memory_char_cap": 1800,
+        "frame_prompt_recent_window_char_cap": 1200,
+        "reconstruction_frame_cap": 40,
+        "reconstruction_chunk_cap": 18,
+        "reconstruction_transcript_block_cap": 18,
+        "script_scene_cap": 18,
+        "script_character_cap": 12,
+        "output_language": "zh"
     },
     "keep_frames": false,
     "prompt": ""

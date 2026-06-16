@@ -1,65 +1,58 @@
 Frame Description Instructions
-Previous Notes Section
-[Previous frame descriptions will appear here in chronological order]
 
+Output Language
+{OUTPUT_LANGUAGE}
+
+Recent Window
+{RECENT_WINDOW}
+
+Story Memory
+{STORY_MEMORY}
+
+Nearby Audio
+{AUDIO_SNIPPET}
+
+Legacy Previous Notes
 {PREVIOUS_FRAMES}
 
-Your Tasks
-You are viewing Frame [X] of this video sequence. Your goal is to document what you observe in a way that contributes to a coherent narrative of the entire video.
-Step 1: Quick Scan
+Your Task
+请将当前帧作为长视频中的一部分进行分析。
+保持与最近帧的连续性，但不要编造任何画面无法支持的事实。
+音频可用于补充上下文、称谓或画外事件，但可见内容优先级更高。
 
-Watch for key changes from the previous descriptions
-Note any new elements or developments
-Identify if this is a transition moment or continuation
+Output Rules
+- 先输出一个紧凑、合法的 JSON 对象。
+- 再在 `Narrative:` 下输出简短说明。
+- JSON 键名保持英文，字段值与 Narrative 必须使用 `{OUTPUT_LANGUAGE}`。
+- 如果同一人物已经在近期记忆中出现，优先复用稳定称谓或角色描述。
+- 不要编造具体人名；如果近期记忆或附近音频里没有已验证名字，`name` 留空，改用 `role` 或外观特征。
 
-Step 2: Document Your Frame
-Follow this structure for your notes:
+JSON Schema
+{
+  "scene": "short scene label",
+  "characters": [
+    {
+      "name": "character name or empty string",
+      "appearance": ["visible appearance clues"],
+      "role": "role or relation if known"
+    }
+  ],
+  "actions": ["key visible actions"],
+  "objects": ["important objects or props"],
+  "dialogue_hint": "visible or audio-supported dialogue clue",
+  "continuity_points": ["what should be tracked next"],
+  "scene_changed": false
+}
 
-Setting/Scene (if changed from previous)
-
-Only describe if there's a notable change from previous frames
-Include any new environmental details
-
-
-Action/Movement
-
-What is happening in this specific moment?
-Focus on motion and changes
-Note the direction of movement
-Describe gestures or expressions
-
-
-New Information
-
-Document any new objects, people, or text that appears
-Note any changes in audio described in previous frames
-Record any new dialogue or text shown
-
-
-Continuity Points
-
-Connect your observations to previous notes
-Highlight how this frame advances the narrative
-Note if something mentioned in previous frames is no longer visible
-
-
-
-Writing Guidelines
-
-Use present tense
-Be specific and concise
-Avoid interpretation - stick to what you can see
-Use clear transitional phrases to connect to previous descriptions
-Include timestamp if available
+Writing Guidance
+- 使用现在时。
+- 保持客观、克制。
+- 聚焦可见动作、场景变化、人物连续性和关键道具。
+- 如果当前帧与最近窗口高度相似，强调“延续”而不是重复描述。
+- 如果人物身份不确定，使用“哥哥、工人、人物”等通用称谓，避免生成新的专有姓名。
 
 {prompt}
 
-Format Your Notes As:
-
-```
-Frame [X] If there are no existing frames you are Frame 0, otherwise you're the next frame
-[Your observations following the structure above]
-Key continuation points:
-- [List 2-3 elements that the next viewer should particularly watch for]
-
-```
+Narrative format
+Narrative:
+[使用 {OUTPUT_LANGUAGE}，用 2-4 句描述当前帧在故事中的位置与承接]

@@ -34,23 +34,39 @@ class Config:
         2. Fall back to default config (default_config.json)
         """
         try:
+            with open(self.default_config) as f:
+                default_config = json.load(f)
+
             if self.user_config.exists():
                 logger.debug(f"Loading user config from {self.user_config}")
                 with open(self.user_config) as f:
-                    self.config = json.load(f)
+                    user_config = json.load(f)
+                self.config = self._deep_merge_dicts(default_config, user_config)
             else:
                 logger.debug(f"No user config found, loading default config from {self.default_config}")
-                with open(self.default_config) as f:
-                    self.config = json.load(f)
+                self.config = default_config
                     
             # Ensure prompts is a list
             if not isinstance(self.config.get("prompts", []), list):
                 logger.warning("Prompts in config is not a list, setting to empty list")
                 self.config["prompts"] = []
+
+            if not isinstance(self.config.get("analysis", {}), dict):
+                logger.warning("Analysis config is not a dict, setting to empty dict")
+                self.config["analysis"] = {}
                 
         except Exception as e:
             logger.error(f"Error loading config: {e}")
             raise
+
+    def _deep_merge_dicts(self, base: dict, override: dict) -> dict:
+        merged = dict(base)
+        for key, value in override.items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key] = self._deep_merge_dicts(merged[key], value)
+            else:
+                merged[key] = value
+        return merged
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value with optional default."""
@@ -74,6 +90,8 @@ class Config:
                 elif key == "model":
                     client = self.config["clients"]["default"]
                     self.config["clients"][client]["model"] = value
+                elif key == "output":
+                    self.config["output_dir"] = value
                 elif key == "prompt":
                     self.config["prompt"] = value
                 #overide audio config
@@ -100,11 +118,10 @@ class Config:
             logger.error(f"Error saving user config: {e}")
             raise
 
-def get_client(config: Config) -> dict:
-    """Get the appropriate client configuration based on configuration."""
-    client_type = config.get("clients", {}).get("default", "ollama")
+def get_client_by_type(config: Config, client_type: str) -> dict:
+    """Get client configuration for a specific client type."""
     client_config = config.get("clients", {}).get(client_type, {})
-    
+
     if client_type == "ollama":
         return {"url": client_config.get("url", "http://localhost:11434")}
     elif client_type == "openai_api":
@@ -121,8 +138,19 @@ def get_client(config: Config) -> dict:
     else:
         raise ValueError(f"Unknown client type: {client_type}")
 
+
+def get_client(config: Config) -> dict:
+    """Get the appropriate client configuration based on configuration."""
+    client_type = config.get("clients", {}).get("default", "ollama")
+    return get_client_by_type(config, client_type)
+
+
+def get_model_by_type(config: Config, client_type: str) -> str:
+    """Get the model configured for a specific client type."""
+    client_config = config.get("clients", {}).get(client_type, {})
+    return client_config.get("model", "llama3.2-vision")
+
 def get_model(config: Config) -> str:
     """Get the appropriate model based on client type and configuration."""
     client_type = config.get("clients", {}).get("default", "ollama")
-    client_config = config.get("clients", {}).get(client_type, {})
-    return client_config.get("model", "llama3.2-vision")
+    return get_model_by_type(config, client_type)

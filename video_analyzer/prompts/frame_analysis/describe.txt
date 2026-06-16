@@ -1,98 +1,54 @@
 Video Summary Instructions
-Available Materials
-Frame 1 of the video (viewable)
 
-Available Materials
-Complete set of chronological frame descriptions from all previous viewers
+Output Language
+{OUTPUT_LANGUAGE}
 
+Frame Notes
 {FRAME_NOTES}
 
-Video Transcript
+Chunk Summaries
+{CHUNK_SUMMARIES}
 
+Story Memory
+{STORY_MEMORY}
+
+Audio Summary
+{AUDIO_SUMMARY}
+
+Actual Video Duration
+{VIDEO_DURATION}
+
+Verified Characters
+{VERIFIED_CHARACTERS}
+
+Transcript
 {TRANSCRIPT}
 
-
-
 Your Task
-You are synthesizing multiple frame descriptions into a cohesive video summary. You have access to the first frame and detailed notes about all subsequent frames.
-Step 1: Review Process
+请基于已有分析结果，输出一份适合用户审查和后续剧本整理的完整视频总结。
+优先使用 frame notes 提取具体事件，使用 chunk summaries 判断场景推进，使用 story memory 维持人物与道具连续性，并用 transcript/audio summary 补充对白与氛围。
 
-First Frame Analysis
-
-Study your available frame in detail
-Note opening composition, characters, and setting
-Identify the initial tone and context
-
-
-Notes Review
-
-Read through all frame descriptions chronologically
-Mark key transitions and major developments
-Identify narrative patterns and themes
-Note any inconsistencies or gaps in descriptions
-
-
-
-Step 2: Synthesis Guidelines
-Create your summary following this structure:
-
-Opening Description
-
-Begin with what you can directly verify from your frame
-Establish the initial setting, characters, and situation
-
-
-Narrative Development
-
-Build the story chronologically
-Connect scenes and transitions naturally
-Maintain consistent character descriptions
-Track significant object movements and changes
-Include relevant audio elements mentioned in notes
-
-
-Technical Elements
-
-Note camera movements described
-Include editing transitions
-Reference significant visual effects
-Mention notable lighting or composition changes
-
-
-
-Writing Style Guidelines
-
-Write in present tense
-Use clear, active voice
-Maintain objective descriptions
-Avoid speculation beyond provided notes
-Include specific details that build credibility
-Connect scenes with smooth transitions
-Maintain consistent tone throughout
-
-Quality Check
-Before submitting, verify:
-
-The summary flows naturally
-No contradictions exist between sections
-All major elements from notes are included
-The narrative is coherent for someone who hasn't seen the video
-Technical terms are used correctly
-The opening matches your viewed frame
-Transitions between described frames feel natural
+Rules
+- 最终输出必须使用 `{OUTPUT_LANGUAGE}`。
+- 时间顺序必须清晰，不能跳频、串频。
+- 人物描述与称谓必须前后一致。
+- 以可见事实为主，避免臆测。
+- transcript 只能作为辅助，不可凌驾于视觉事实之上。
+- 保留主要转场、情绪变化和结局状态。
+- 必须原样使用提供的实际时长，禁止自行估算或扩展。
+- 只能使用上方列出的已验证人物称谓；身份不确定时使用“哥哥、工人、某人物”等通用标签。
 
 {prompt}
 
-Format Your Summary As:
+Output Format
+视频总结
+时长：[直接填写提供的真实时长]
 
-```
-IDEO SUMMARY
-Duration: [if provided in notes]
+开场：
+[说明故事起点、人物初始状态]
 
-[Opening paragraph - based on your viewed frame]
+发展：
+[按时间顺序概括场景推进、关键动作、对白与关系变化]
 
-[Main body - chronological progression from notes]
-
-[Closing observations - final state/resolution]
-
-Note: This summary is based on direct observation of the first frame combined with detailed notes from subsequent frames.
+结尾：
+[说明最后状态、结果或悬念]
