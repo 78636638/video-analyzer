@@ -1612,6 +1612,22 @@ class VideoAnalyzer:
                 return parsed
             aggregated = self._merge_stage_verifier_result(aggregated, verified)
         finalized = self._finalize_stage_verifier_result(parsed, aggregated)
+        if self._is_tail_single_frame_stage(frames, stage_id, total_stages):
+            tail_timestamps = [f"{frames[0].timestamp:.2f}s"]
+            filtered_events = self._filter_events_within_timestamp_range(
+                finalized.get("key_events", []),
+                frames[0].timestamp - 1.0,
+                frames[-1].timestamp + 1.0,
+                fallback_events=self._build_dialogue_lines_from_snippets(audio_snippets or [], limit=2),
+                timestamp_hints=tail_timestamps,
+            )
+            finalized["key_events"] = filtered_events
+            finalized["event_lines"] = filtered_events
+            if not filtered_events:
+                previous_stage = self.batch_stage_analyses[-1] if self.batch_stage_analyses else None
+                scene_anchor = finalized.get("scene_label") or (previous_stage.scene_label if previous_stage else "")
+                finalized["key_events"] = [self._build_tail_closing_event_text(scene_anchor, frames[-1].timestamp)]
+                finalized["event_lines"] = finalized["key_events"]
         return self._post_process_stage_batch_parsed(finalized, audio_snippets, stage_id)
 
     def _get_refinement_client_and_model(self) -> tuple[LLMClient, str]:
@@ -1682,6 +1698,38 @@ class VideoAnalyzer:
                 return True
         return False
 
+    def _looks_like_qwen_stage_output_anomaly(
+        self,
+        parsed: Dict[str, Any],
+        raw_response: str,
+        frames: List[Frame],
+    ) -> bool:
+        if not raw_response:
+            return True
+        if self._looks_like_stage_prompt_echo(raw_response):
+            return True
+        summary = (parsed.get("timeline_summary") or "").strip()
+        scene_label = (parsed.get("scene_label") or "").strip()
+        key_events = [item for item in (parsed.get("key_events") or []) if isinstance(item, str) and item.strip()]
+        if not summary and not key_events and not scene_label:
+            return True
+        if summary and self._looks_like_stage_prompt_echo(summary):
+            return True
+        if frames:
+            start_ts = float(frames[0].timestamp)
+            end_ts = float(frames[-1].timestamp)
+            out_of_range_events: List[str] = []
+            timestamped_events: List[str] = []
+            for event in key_events:
+                ts = self._extract_event_timestamp(event)
+                if ts is not None:
+                    timestamped_events.append(event)
+                    if ts + 0.5 < start_ts or ts - 0.5 > end_ts:
+                        out_of_range_events.append(event)
+            if timestamped_events and len(out_of_range_events) == len(timestamped_events):
+                return True
+        return False
+
     def _build_stage_batch_fallback(
         self,
         frames: List[Frame],
@@ -1692,13 +1740,24 @@ class VideoAnalyzer:
         previous_stage = self.batch_stage_analyses[-1] if self.batch_stage_analyses else None
         audio_lines = self._get_audio_lines_for_range(frames[0].timestamp, frames[-1].timestamp, limit=3)
         is_tail_single_frame = self._is_tail_single_frame_stage(frames, stage_id, total_stages)
+        tail_timestamps = [f"{frames[0].timestamp:.2f}s"] if is_tail_single_frame else []
         if is_tail_single_frame:
-            key_events = self._sanitize_stage_lines(audio_lines, kind="event")
+            candidate_events = self._filter_events_within_timestamp_range(
+                parsed.get("key_events", []),
+                frames[0].timestamp - 1.0,
+                frames[-1].timestamp + 1.0,
+                fallback_events=audio_lines,
+                timestamp_hints=tail_timestamps,
+            )
+            key_events = self._sanitize_stage_lines(candidate_events, kind="event")
         else:
             key_events = self._sanitize_stage_lines(parsed.get("key_events", []), kind="event")
             if not key_events:
                 key_events = self._sanitize_stage_lines(audio_lines, kind="event")
-        if not key_events and previous_stage:
+        if is_tail_single_frame and not key_events and previous_stage:
+            scene_anchor = previous_stage.scene_label or self._normalize_scene_location(parsed.get("scene_label", ""))
+            key_events = [self._build_tail_closing_event_text(scene_anchor, frames[-1].timestamp)]
+        elif not key_events and previous_stage:
             key_events = previous_stage.key_events[:2]
         key_characters = parsed.get("key_characters", []) or []
         if (not key_characters or is_tail_single_frame) and previous_stage:
@@ -1742,6 +1801,55 @@ class VideoAnalyzer:
             "key_events": list(dict.fromkeys(key_events))[:8],
             "scene_label": scene_label,
         }
+
+    def _extract_event_timestamp(self, text: str) -> Optional[float]:
+        if not text:
+            return None
+        match = re.search(r"(\d+(?:\.\d+)?)\s*s", text)
+        if not match:
+            return None
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+
+    def _filter_events_within_timestamp_range(
+        self,
+        events: Any,
+        start_timestamp: float,
+        end_timestamp: float,
+        fallback_events: Optional[List[str]] = None,
+        timestamp_hints: Optional[List[str]] = None,
+    ) -> List[str]:
+        cleaned_events: List[str] = []
+        if isinstance(events, list):
+            for event in events:
+                if isinstance(event, str) and event.strip():
+                    cleaned_events.append(event.strip())
+        in_range_events: List[str] = []
+        for event in cleaned_events:
+            event_ts = self._extract_event_timestamp(event)
+            if event_ts is None:
+                in_range_events.append(event)
+            elif start_timestamp <= event_ts <= end_timestamp:
+                in_range_events.append(event)
+        if in_range_events:
+            return in_range_events
+        if cleaned_events and not any(self._extract_event_timestamp(item) is not None for item in cleaned_events):
+            return cleaned_events
+        for hint in timestamp_hints or []:
+            in_range_events.append(hint)
+        for item in fallback_events or []:
+            if isinstance(item, str) and item.strip():
+                in_range_events.append(item.strip())
+        return in_range_events
+
+    def _build_tail_closing_event_text(self, scene_anchor: str, timestamp: float) -> str:
+        timestamp_text = f"{timestamp:.2f}s"
+        if self.output_language.lower().startswith("zh"):
+            anchor = self._normalize_scene_location(scene_anchor) or "当前场景"
+            return f"{timestamp_text} | {anchor}结尾画面定格，留给观众对人物关系与场景氛围的回味"
+        return f"{timestamp_text} | closing shot in {scene_anchor or 'current scene'}, leaving room for character and atmosphere reflection"
 
     def _clean_list_field(self, value: Any) -> List[str]:
         if isinstance(value, str):
@@ -1931,6 +2039,7 @@ class VideoAnalyzer:
 
     def _compact_action_phrase(self, action: str, max_chars: int = 24) -> str:
         cleaned = self._sanitize_stage_text(action)
+        cleaned = re.sub(r"^\d+(?:\.\d+)?\s*s\s*[\|｜]\s*", "", cleaned).strip()
         cleaned = re.sub(r"^(人物|主角|男子|女子|黑发男子|黑发人物|一位人物|一名人物)", "", cleaned).strip()
         return self._truncate_text(cleaned, max_chars)
 
@@ -1951,6 +2060,24 @@ class VideoAnalyzer:
             "模糊转场",
         )
         return any(token in cleaned for token in transition_tokens)
+
+    def _is_opening_description_action_text(self, text: str) -> bool:
+        cleaned = self._normalize_summary_phrase(text)
+        if not cleaned:
+            return False
+        if self._is_transition_action_text(cleaned):
+            return False
+        if len(cleaned) > 80:
+            return False
+        description_patterns = (
+            re.compile(r"在.{0,30}?(表达|倾诉|阐述|陈述|讲述).{0,30}?(感受|想法|心声|意见)"),
+            re.compile(r"在.{0,30}?(表示|提到|说).{0,30}?(感受|想法|心声|意见|看法)"),
+            re.compile(r"(身穿|身着|穿着).{0,30}?(服装|外套|衣服|套装)"),
+            re.compile(r"处于.{0,20}?(状态|氛围|环境)"),
+            re.compile(r"画面以.{0,30}?(开场|开始|呈现)"),
+            re.compile(r"^一位?人物.{0,30}?(出现|登场|入镜)"),
+        )
+        return any(pattern.search(cleaned) for pattern in description_patterns)
 
     def _extract_scene_tokens(self, text: str) -> List[str]:
         cleaned = self._normalize_scene_location(text)
@@ -2104,6 +2231,27 @@ class VideoAnalyzer:
                     candidates.append(candidate)
         return candidates
 
+    def _detect_transition_scene_composite(self, parsed: Dict[str, Any], raw_response: str) -> str:
+        sources: List[str] = []
+        if parsed.get("timeline_summary"):
+            sources.append(parsed["timeline_summary"])
+        if parsed.get("detail_lines"):
+            sources.extend(parsed["detail_lines"])
+        if raw_response:
+            sources.append(raw_response)
+        transition_pattern = re.compile(
+            r"(?:从|由|自|在)([^，,。；;]{1,12}?)(?:切换至|切换到|转到|转入|转换到|切到)([^，,。；;]{1,12}?)(?=[\s，,。；;、]|$)"
+        )
+        for source in sources:
+            for match in transition_pattern.finditer(source or ""):
+                from_scene = self._normalize_scene_location(match.group(1))
+                to_scene = self._normalize_scene_location(match.group(2))
+                if from_scene and to_scene and from_scene != to_scene and "/" not in from_scene and "/" not in to_scene:
+                    composite = self._normalize_scene_location(f"{from_scene}/{to_scene}")
+                    if composite:
+                        return composite
+        return ""
+
     def _refine_stage_scene_label(
         self,
         parsed: Dict[str, Any],
@@ -2114,6 +2262,13 @@ class VideoAnalyzer:
         total_stages: int,
     ) -> Dict[str, Any]:
         refined = dict(parsed)
+        composite_label = self._detect_transition_scene_composite(refined, raw_response)
+        if composite_label:
+            refined["scene_label"] = composite_label
+            if not refined.get("scene_lines") or len(refined["scene_lines"]) < 2:
+                existing = list(refined.get("scene_lines", []) or [])
+                parts = composite_label.split("/")
+                refined["scene_lines"] = list(dict.fromkeys([*existing, *parts]))[:3]
         current_label = self._normalize_scene_location(refined.get("scene_label", ""))
         current_score = self._scene_label_specificity_score(current_label)
         current_tokens = set(self._extract_scene_tokens(current_label))
@@ -2143,11 +2298,18 @@ class VideoAnalyzer:
             elif candidate_score == best_score and candidate_score > 0 and len(candidate) > len(best_candidate):
                 best_candidate = candidate
                 best_score = candidate_score
-        if best_candidate:
+        if best_candidate and best_candidate != current_label and not composite_label:
             refined["scene_label"] = best_candidate
             if not refined.get("scene_lines"):
                 refined["scene_lines"] = [best_candidate]
             elif refined.get("scene_lines"):
+                existing = self._extract_scene_candidates_from_lines(refined.get("scene_lines", []))
+                if best_candidate not in existing:
+                    refined["scene_lines"] = [best_candidate] + [line for line in refined.get("scene_lines", []) if line != best_candidate]
+        elif best_candidate:
+            if not refined.get("scene_lines"):
+                refined["scene_lines"] = [best_candidate]
+            elif best_candidate not in self._extract_scene_candidates_from_lines(refined.get("scene_lines", [])):
                 existing = self._extract_scene_candidates_from_lines(refined.get("scene_lines", []))
                 if best_candidate not in existing:
                     refined["scene_lines"] = [best_candidate] + [line for line in refined.get("scene_lines", []) if line != best_candidate]
@@ -2221,6 +2383,8 @@ class VideoAnalyzer:
             compact = self._compact_action_phrase(action, 24)
             if not compact or self._is_generic_stage_event_text(compact):
                 continue
+            if self._is_opening_description_action_text(compact):
+                continue
             if self._is_transition_action_text(compact):
                 fallback.append(compact)
                 continue
@@ -2238,16 +2402,40 @@ class VideoAnalyzer:
         if base and len(distinct_scene_lines) >= 2:
             return base
         first_event = self._pick_primary_scene_action(chunk.key_events)
+        if first_event and (
+            not base
+            or self._action_conflicts_with_scene_location(first_event, base)
+            or self._is_transition_action_text(first_event)
+            or self._is_opening_description_action_text(first_event)
+        ):
+            first_event = ""
         if base and first_event:
             return f"{base}：{first_event}"
         if base:
             return base
         if first_event:
             return first_event
-        return self._truncate_text(self._sanitize_stage_text(chunk.summary), 24)
+        summary_text = self._sanitize_stage_text(chunk.summary)
+        if summary_text and not self._is_fallback_stage_template(summary_text):
+            return self._truncate_text(summary_text, 24)
+        return base or f"场景{chunk.chunk_id:03d}"
 
     def _build_scene_title_from_chunk(self, chunk: ChunkSummary) -> str:
         return self._build_scene_title(chunk, stage_analysis=None)
+
+    def _is_fallback_stage_template(self, text: str) -> bool:
+        cleaned = self._normalize_summary_phrase(text)
+        if not cleaned:
+            return True
+        markers = (
+            re.compile(r"^阶段\d+延续"),
+            re.compile(r"^阶段\d+是结尾画面"),
+            re.compile(r"^Stage \d+ continues"),
+            re.compile(r"^Stage \d+ is a closing"),
+            re.compile(r"^continued scene"),
+            re.compile(r"^延续场景"),
+        )
+        return any(pattern.match(cleaned) for pattern in markers)
 
     def _get_audio_lines_for_range(
         self,
@@ -2361,6 +2549,8 @@ class VideoAnalyzer:
         for line in self._filter_story_event_candidates(lines, overlay_text_lines=overlay_text_lines, limit=limit * 2):
             cleaned = self._sanitize_stage_text(line)
             if not cleaned:
+                continue
+            if self._is_opening_description_action_text(cleaned):
                 continue
             if self._looks_like_platform_overlay_noise(cleaned) and not self._has_audio_support_for_phrase(
                 cleaned,
@@ -3288,14 +3478,30 @@ class VideoAnalyzer:
         response_text = (response or {}).get("response", "").strip()
         parsed = self._parse_stage_batch_response(response_text)
         parsed = self._post_process_stage_batch_parsed(parsed, stage_audio_snippets, stage_id)
-        parsed = self._verify_stage_batch_parsed(
-            frames,
-            parsed,
-            response_text,
-            stage_id,
-            total_stages,
-            audio_snippets=stage_audio_snippets,
-        )
+        skip_verifier = self._looks_like_qwen_stage_output_anomaly(parsed, response_text, frames)
+        if skip_verifier:
+            _debug_emit(
+                "C",
+                "analyzer.py:analyze_frame_batch",
+                "Skip stage verifier due to qwen anomaly",
+                {
+                    "stage_id": stage_id,
+                    "response_length": len(response_text),
+                    "timeline_summary_length": len(parsed.get("timeline_summary", "")),
+                    "scene_label": parsed.get("scene_label", ""),
+                    "key_event_count": len(parsed.get("key_events", []) or []),
+                    "finish_reason": (response or {}).get("finish_reason"),
+                },
+            )
+        else:
+            parsed = self._verify_stage_batch_parsed(
+                frames,
+                parsed,
+                response_text,
+                stage_id,
+                total_stages,
+                audio_snippets=stage_audio_snippets,
+            )
         if self._looks_like_stage_fallback_needed(parsed, response_text, frames=frames, stage_id=stage_id, total_stages=total_stages):
             parsed = self._build_stage_batch_fallback(frames, parsed, stage_id, total_stages)
         elif not parsed.get("timeline_summary"):
@@ -3341,6 +3547,30 @@ class VideoAnalyzer:
             dialogue_summary=dialogue_summary,
         )
         self.batch_stage_analyses.append(stage_analysis)
+        refined_after_chunk = self._refine_stage_scene_label(
+            {
+                "scene_label": chunk.scene_label,
+                "scene_lines": stage_analysis.scene_lines,
+                "timeline_summary": stage_analysis.timeline_summary,
+                "key_events": chunk.key_events,
+                "detail_lines": stage_analysis.detail_lines,
+                "overlay_text_lines": stage_analysis.overlay_text_lines,
+                "key_characters": chunk.key_characters,
+            },
+            raw_response=response_text,
+            previous_stage=self.batch_stage_analyses[-2] if len(self.batch_stage_analyses) >= 2 else None,
+            frames=frames,
+            stage_id=stage_id,
+            total_stages=total_stages,
+        )
+        refined_chunk_label = self._normalize_scene_location(refined_after_chunk.get("scene_label", ""))
+        if refined_chunk_label and refined_chunk_label != chunk.scene_label:
+            chunk.scene_label = refined_chunk_label
+            stage_analysis.scene_label = refined_chunk_label
+            if refined_chunk_label not in stage_analysis.scene_lines:
+                stage_analysis.scene_lines = [refined_chunk_label] + [
+                    line for line in stage_analysis.scene_lines if line != refined_chunk_label
+                ]
 
         compact_response = self._truncate_text(
             f"阶段{stage_id}：{stage_analysis.scene_label or '阶段场景'}；"
@@ -3593,6 +3823,21 @@ class VideoAnalyzer:
         current_location = self._normalize_scene_location(current.get("location", ""))
         if not previous_location or previous_location != current_location:
             return False
+        previous_duration = float(previous.get("end_timestamp", 0.0)) - float(previous.get("start_timestamp", 0.0))
+        current_duration = float(current.get("end_timestamp", 0.0)) - float(current.get("start_timestamp", 0.0))
+        previous_frames = previous.get("end_frame", 0) - previous.get("start_frame", 0) + 1
+        current_frames = current.get("end_frame", 0) - current.get("start_frame", 0) + 1
+        previous_actions = set(item for item in (previous.get("key_actions", []) or []) if isinstance(item, str) and item.strip())
+        current_actions = set(item for item in (current.get("key_actions", []) or []) if isinstance(item, str) and item.strip())
+        new_actions = current_actions - previous_actions
+        if current_frames <= 1 and previous_frames > 1 and new_actions:
+            return False
+        if previous_frames <= 1 and current_frames > 1 and previous_actions - current_actions:
+            return False
+        if previous_duration > 0 and current_duration > 0 and min(previous_duration, current_duration) <= 1.5 and not new_actions:
+            return True
+        if previous_duration > 0 and current_duration > 0 and min(previous_duration, current_duration) <= 1.5:
+            return False
         previous_actions = [self._normalize_summary_phrase(item) for item in previous.get("key_actions", []) if item]
         current_actions = [self._normalize_summary_phrase(item) for item in current.get("key_actions", []) if item]
         is_short_continuation = self._is_explicit_short_scene_continuation(current)
@@ -3689,6 +3934,8 @@ class VideoAnalyzer:
             cards.append(
                 {
                     "scene_id": f"scene-{chunk.chunk_id:03d}",
+                    "start_frame": chunk.start_frame,
+                    "end_frame": chunk.end_frame,
                     "start_timestamp": chunk.start_timestamp,
                     "end_timestamp": chunk.end_timestamp,
                     "title": scene_title,
@@ -3710,11 +3957,18 @@ class VideoAnalyzer:
     def build_story_beats(self, scene_cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         beats = []
         for index, card in enumerate(scene_cards, 1):
+            card_title = card.get("title") or card.get("location") or f"场景{index}"
+            card_summary = card.get("summary") or ", ".join(card.get("key_actions", [])[:3]) or card_title
             beats.append(
                 {
                     "beat_id": f"beat-{index:03d}",
                     "order": index,
-                    "summary": card.get("summary") or ", ".join(card.get("key_actions", [])[:3]) or card.get("title", ""),
+                    "scene_id": card.get("scene_id"),
+                    "title": card_title,
+                    "start_timestamp": card.get("start_timestamp", 0.0),
+                    "end_timestamp": card.get("end_timestamp", 0.0),
+                    "location": card.get("location", ""),
+                    "summary": card_summary,
                     "related_scene_ids": [card.get("scene_id")],
                     "conflict": "",
                     "transition_type": "scene_change" if index > 1 and card.get("transition_note") else "opening",
@@ -3997,6 +4251,9 @@ class VideoAnalyzer:
                 "location": self._get_script_location_text(card),
                 "characters": card.get("characters", []),
                 "plot": plot_text,
+                "key_actions": card.get("key_actions", [])[:6],
+                "key_props": card.get("key_props", [])[:6],
+                "scene_change_note": card.get("transition_note", ""),
                 "visuals": [
                     item
                     for item in [

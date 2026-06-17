@@ -272,13 +272,23 @@ class VideoAnalyzerUI:
             return
 
         try:
+            subprocess_env = os.environ.copy()
+            debug_env_file = Path(".dbg") / f"ui-{session_id}.env"
+            debug_env_file.parent.mkdir(parents=True, exist_ok=True)
+            if not debug_env_file.exists():
+                debug_env_file.write_text(
+                    f"DEBUG_SERVER_URL=http://127.0.0.1:7777/event\nSESSION_ID=ui-{session_id}\n",
+                    encoding="utf-8",
+                )
+            subprocess_env["TRAE_DEBUG_ENV_FILE"] = str(debug_env_file)
+            subprocess_env.setdefault("TRAE_DEBUG_RUN_ID", f"ui-{session_id}")
             process = subprocess.Popen(
                 session['cmd'],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
                 bufsize=1,
-                env=os.environ.copy(),
+                env=subprocess_env,
             )
             logger.info("Session %s subprocess started with pid %s", session_id, process.pid)
             self._emit_status(
